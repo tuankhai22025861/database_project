@@ -1,6 +1,6 @@
 # database_project
 This are the procedure for our database project
-1.insert_new_customer(
+1.insert_new_customer(</br>
   IN address TEXT,
   IN fullname VARCHAR,
   IN dob DATE,
