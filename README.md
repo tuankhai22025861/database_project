@@ -1,7 +1,7 @@
 # database_project
 This are the procedure for our database project
 1.insert_new_customer(</br>
-  IN address TEXT,
+  IN address TEXT,</br>
   IN fullname VARCHAR,
   IN dob DATE,
   IN gender CHAR, 
