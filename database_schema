@@ -54,7 +54,7 @@ create table orders(
 	order_date date,
 	cash bool,
 	card bool,
-	voucher int check(voucher between 5 and 50),
+	voucher int,
 	customer_id int references customer(customer_id),
 	product_id int references product(product_id)
 );
