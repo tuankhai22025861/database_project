@@ -130,3 +130,29 @@ $$
 LANGUAGE plpgsql;
 -- select * from make_order(1,1,1,10000)
 -- select * from make_order(1,1,1,10)
+--5.CHECK FOR CUSTOMER ORDER
+CREATE OR REPLACE FUNCTION check_order(
+    p_customer_id INT
+) RETURNS TABLE(
+    customer_id INT,
+    order_id INT,
+    total_with_out_tax MONEY,
+    total_with_tax MONEY,
+    order_date DATE,
+    status TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        o.customer_id,
+        o.order_id,
+        o.total_with_out_tax,
+        o.total_with_tax,
+        o.order_date,
+        o.status
+    FROM orders AS o
+    WHERE o.customer_id = p_customer_id
+	ORDER BY o.order_date DESC;
+END;
+$$ LANGUAGE plpgsql;
+select * from check_order(1);
