@@ -32,20 +32,20 @@ create table warehouse(
 	sold int
 );
 create table review(
+	review_id serial primary key,
 	star numeric(2,1),
 	description text,
 	customer_id int references customer(customer_id),
 	product_id int references product(product_id),
-	shop_id int references shop(shop_id),
-	primary key(customer_id,product_id,shop_id)
+	shop_id int references shop(shop_id)
 );
 create table product_shop(
+	product_shop_id serial primary key,
 	quantity int,
 	product_id int references product(product_id),
 	warehouse_id int references warehouse(warehouse_id),
-	shop_id int references shop(shop_id),
-	primary key(product_id,warehouse_id, shop_id)
-)
+	shop_id int references shop(shop_id)
+);
 create table orders(
 	order_id serial primary key,
 	status text check(status in('pending','confirmed','delivering','delivered')),
@@ -57,4 +57,4 @@ create table orders(
 	voucher int check(voucher between 5 and 50),
 	customer_id int references customer(customer_id),
 	product_id int references product(product_id)
-)
+);
