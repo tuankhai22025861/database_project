@@ -36,4 +36,40 @@ begin
 	where p.product_name = p_product_name and p.category_id = p_category_id;
 end;
 $$ language plpgsql;
+--3.CHECK FOR SUFFICIENT STOCKS
+create type ret_check as(
+	status int,
+	product_shop_id int 
+);
 
+create or replace function check_stocks(
+	p_product_id int,
+	p_shop_id int,
+	p_quantity int
+)returns ret_check
+as $$ 
+declare 
+	v_a ret_check;
+	v_quantity int;
+begin
+	v_a.status := 0;
+	v_a.product_shop_id := null;
+	select ps.quantity,ps.product_shop_id
+	into v_quantity,v_a.product_shop_id from product_shop ps
+	where ps.product_id = p_product_id 
+	and ps.shop_id = p_shop_id
+	and ps.quantity > 0;
+--Neu khong du hang
+	if v_quantity < p_quantity then
+	v_a.status := 2;
+--Neu du hang
+	elseif v_quantity > p_quantity then
+	v_a.status := 1;
+--Neu khong co hang		
+	else 	
+	v_a.status := 0;
+	end if;
+	return v_a;
+end;
+$$ language plpgsql;
+select * from check_stocks(1,1,10);
