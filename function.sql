@@ -74,7 +74,7 @@ end;
 $$ language plpgsql;
 select * from check_stocks(1,1,10);
 --4.MAKE ORDER
-CREATE OR REPLACE FUNCTION make_order(
+CREATE OR REPLACE FUNCTION make_order_2(
     customer_id INT,
     shop_id INT,
     product_id INT,
@@ -86,31 +86,31 @@ CREATE OR REPLACE FUNCTION make_order(
 ) AS
 $$
 DECLARE
-    v_product_quantity INT;
-    v_product_shop_id INT;
+    v_check_result RECORD;
     v_order_id INT;
     v_price NUMERIC;
     v_total_wo_tax NUMERIC;
     v_total_w_tax NUMERIC;
 BEGIN
-    -- Check product availability in the specified shop
-    SELECT ps.quantity, ps.product_shop_id INTO v_product_quantity, v_product_shop_id
-    FROM product_shop ps
-    WHERE ps.product_id = make_order.product_id AND ps.shop_id = make_order.shop_id;
+    -- Check product availability in the specified shop using check_stocks function
+    SELECT * INTO v_check_result FROM check_stocks(product_id, shop_id, order_quantity);
 
     -- If not enough quantity is available
-    IF v_product_quantity IS NULL OR v_product_quantity < make_order.order_quantity THEN
+    IF v_check_result.status = 2 THEN
         RETURN QUERY SELECT NULL::INT, FALSE, 'Not enough quantity in stock'::TEXT;
+        RETURN;
+    ELSIF v_check_result.status = 0 THEN
+        RETURN QUERY SELECT NULL::INT, FALSE, 'Product not available in the shop'::TEXT;
         RETURN;
     END IF;
 
     -- Get the product price
     SELECT p.price INTO v_price
     FROM product p
-    WHERE p.product_id = make_order.product_id;
+    WHERE p.product_id = product_id;
 
     -- Calculate total prices
-    v_total_wo_tax := v_price * make_order.order_quantity;
+    v_total_wo_tax := v_price * order_quantity;
     v_total_w_tax := v_total_wo_tax; -- Assuming no tax for simplicity, adjust as needed
 
     -- Create a new order
@@ -120,14 +120,13 @@ BEGIN
 
     -- Reduce the quantity in the product_shop table
     UPDATE product_shop
-    SET quantity = quantity - make_order.order_quantity
-    WHERE product_shop_id = v_product_shop_id;
+    SET quantity = quantity - order_quantity
+    WHERE product_shop_id = v_check_result.product_shop_id;
 
     -- Return the success message
     RETURN QUERY SELECT v_order_id, TRUE, 'Order created successfully'::TEXT;
 END;
-$$
-LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 -- select * from make_order(1,1,1,10000)
 -- select * from make_order(1,1,1,10)
 --5.CHECK FOR CUSTOMER ORDER
