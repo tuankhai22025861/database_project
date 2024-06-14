@@ -155,3 +155,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 select * from check_order(1);
+--6.TRIGGER FOR UPDATE SHOP RATING
+CREATE OR REPLACE FUNCTION update_shop_rating()
+RETURNS TRIGGER AS $$
+DECLARE
+    total_star NUMERIC(3,2);
+BEGIN
+    -- Calculate the average rating for the shop
+    SELECT AVG(star) INTO total_star
+    FROM review
+    WHERE shop_id = NEW.shop_id;
+
+    -- Update the shop table with the new average rating
+    UPDATE shop
+    SET rating = total_star
+    WHERE shop_id = NEW.shop_id;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_update_shop_rating
+AFTER INSERT OR UPDATE ON review
+FOR EACH ROW
+EXECUTE FUNCTION update_shop_rating();
+INSERT INTO review (star, description, customer_id, product_id, shop_id)
+VALUES (4.5, 'Great product!', 1, 1, 1);
+select * from review;
+select * from shop;
