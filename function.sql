@@ -295,3 +295,35 @@ CREATE TRIGGER trg_set_shop_permission_false
 AFTER INSERT ON review
 FOR EACH ROW
 EXECUTE FUNCTION set_shop_permission_false();
+--11. GET TOP SELLING PRODUCT BY YEAR
+CREATE OR REPLACE FUNCTION top_selling_products_by_year(p_shop_id INT, p_year INT)
+RETURNS TABLE (
+    product_id INT,
+    product_name TEXT,
+    total_quantity int
+)
+AS
+$$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        p.product_id,
+        p.product_name,
+        SUM(ps.quantity)::INT AS total_quantity
+    FROM 
+        product p
+    JOIN 
+        product_shop ps ON p.product_id = ps.product_id
+    JOIN 
+        orders o ON ps.product_id = o.product_id
+    WHERE 
+        ps.shop_id = p_shop_id
+        AND EXTRACT(YEAR FROM o.order_date) = p_year
+    GROUP BY 
+        p.product_id, p.product_name
+    ORDER BY 
+        total_quantity DESC
+    LIMIT 10;  -- Limit to top 10 selling products
+END;
+$$
+LANGUAGE plpgsql;
