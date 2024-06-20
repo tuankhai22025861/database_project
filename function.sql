@@ -373,7 +373,7 @@ BEGIN
     RETURN v_product_shop_id;
 END;
 $$ LANGUAGE plpgsql;
---13. CHECK WAREHOUSE FULL
+--14. CHECK WAREHOUSE FULL
 CREATE OR REPLACE FUNCTION check_ware_full(
     p_warehouse_id int
 ) RETURNS int
