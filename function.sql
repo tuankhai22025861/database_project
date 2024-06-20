@@ -517,4 +517,26 @@ $$ LANGUAGE plpgsql;
 --INSERT INTO orders (status, total_with_tax, total_with_out_tax, order_date, cash, card, voucher, customer_id, product_id,quantity)
 --VALUES ('pending', 120.50, 100.00, CURRENT_DATE, TRUE, FALSE, 10, 1, 2,100);
 --select * from confirmed_or_cancel(10,'cancel',2)
-
+--18.CHECK REVENUE BY MONTH
+CREATE OR REPLACE FUNCTION revenue_by_month(id_ INT)
+RETURNS TABLE (
+   	shop_id INT,
+    year_month TEXT,
+    total_revenue MONEY
+)
+AS
+$$
+BEGIN
+    RETURN QUERY
+	select ps.shop_id, 
+	TO_CHAR(o.order_date, 'YYYY-MM') AS year_month,
+    SUM(o.total_with_tax) AS total_revenue
+	from orders o 
+	join product p on p.product_id = o.product_id
+	join product_shop ps on ps.product_id = p.product_id
+	where ps.shop_id = id_
+	group by ps.shop_id,TO_CHAR(o.order_date, 'YYYY-MM')
+	order by year_month;
+END;
+$$
+LANGUAGE plpgsql;
