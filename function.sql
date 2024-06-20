@@ -276,3 +276,22 @@ BEGIN
     WHERE o.order_id = p_id;
 END;
 $$ LANGUAGE plpgsql;
+--10. TRIGGER TO DELETE SHOP
+CREATE OR REPLACE FUNCTION set_shop_permission_false()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Check the rating of the shop associated with the new review
+    IF (SELECT rating FROM shop WHERE shop_id = NEW.shop_id) < 3 THEN
+        -- Set the shop's permission to false
+        UPDATE shop
+        SET permission = FALSE
+        WHERE shop_id = NEW.shop_id;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_set_shop_permission_false
+AFTER INSERT ON review
+FOR EACH ROW
+EXECUTE FUNCTION set_shop_permission_false();
