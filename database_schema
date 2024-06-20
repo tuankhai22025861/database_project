@@ -55,6 +55,7 @@ create table orders(
 	cash bool,
 	card bool,
 	voucher int,
+	quantity int,
 	customer_id int references customer(customer_id),
 	product_id int references product(product_id)
 );
