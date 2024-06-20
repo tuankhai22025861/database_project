@@ -236,3 +236,43 @@ begin
 end;
 $$ language plpgsql;
 
+--9.CHECK ORDER PAYMENT
+CREATE OR REPLACE FUNCTION check_order_payment(
+	p_id int,
+	form varchar(10)
+)
+RETURNS TABLE(
+ order_id INT,
+    total_wo_tax MONEY,
+    total_w_tax MONEY,
+    status TEXT,
+    order_date DATE
+) AS $$
+BEGIN
+    -- Update the payment method in the orders table
+    IF form = 'card' THEN
+        UPDATE orders
+        SET card = TRUE
+        WHERE orders.order_id = p_id;
+    ELSE 
+        UPDATE orders
+        SET cash = TRUE
+        WHERE orders.order_id = p_id;
+    END IF;
+
+    -- Update the order status to 'delivering'
+    UPDATE orders
+    SET status = 'delivering'
+    WHERE orders.order_id = p_id;
+
+    -- Return the updated order details
+    RETURN QUERY
+    SELECT o.order_id::INT, 
+           o.total_with_out_tax::MONEY, 
+           o.total_with_tax::MONEY, 
+           o.status::TEXT, 
+           o.order_date::DATE
+    FROM orders o
+    WHERE o.order_id = p_id;
+END;
+$$ LANGUAGE plpgsql;
