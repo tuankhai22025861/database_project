@@ -345,7 +345,7 @@ END;
 $$
 LANGUAGE plpgsql;
 select * from check_tong_sl_sp()
---13.GET PRODUCT SHOP ID
+--14.GET PRODUCT SHOP ID
 CREATE OR REPLACE FUNCTION get_product_shop_id(
     p_product_id INT,
     p_shop_id INT,
@@ -371,7 +371,7 @@ BEGIN
     RETURN v_product_shop_id;
 END;
 $$ LANGUAGE plpgsql;
---14. CHECK WAREHOUSE FULL
+--15. CHECK WAREHOUSE FULL
 CREATE OR REPLACE FUNCTION check_ware_full(
     p_warehouse_id int
 ) RETURNS int
@@ -387,7 +387,7 @@ BEGIN
     RETURN total_quantity;
 END;
 $$ LANGUAGE plpgsql;
---15. UPDATE NEW PRODUCT
+--13. UPDATE NEW PRODUCT
 CREATE OR REPLACE FUNCTION add_product_to_shop(
     p_shop_id INT,
     p_product_name TEXT,
