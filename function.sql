@@ -1,529 +1,542 @@
--- 1.hàm này để thêm tài khoản khách hàng vào 
-create or replace function ínsert_new_customer(
-    IN address TEXT,
-    IN fullName VARCHAR(40),
-    IN dob DATE,
-    IN gender CHAR(1),
-    IN pass_word TEXT
-)
-returns TEXT
-language plpgsql
+--1.INSERT NEW CUSTOMER
+create or replace function insert_new_customer(
+	p_address text,
+	p_fullname text,
+	p_dob date,
+	p_gender char(1),
+	p_pass_word text
+)returns text
 as $$
-declare
-    s1 TEXT;
-begin
-    insert into customer (address, fullname, dob, gender, pass_word)
-    values (address, fullName, dob, gender, pass_word);
+begin 
+	insert into customer(address,fullname,dob,gender,pass_word)
+	values(p_address,p_fullname,p_dob,p_gender,p_pass_word);
+	return 'Insert successfully';
 
-    s1 := 'Insert successfully';
-    return s1;
 exception
-    WHEN unique_violation THEN
-        return 'Insert failed: duplicate key value violates unique constraint';
-    WHEN OTHERS THEN
-        return 'Insert failed: ' || SQLERRM;
+	when others then
+	return 'Insert failed: '||SQLERRM;
 end;
-$$;
-
---2.Hàm này để tìm sản phẩm theo product_id
-create function find_product_by_category(category_id_input int)
-returns table (
-	product_name varchar(40),
+$$ language plpgsql;
+select * from insert_new_customer('123 Ngo','Quang','1999-9-9','M','quincy')
+select * from customer
+--2.FIND PRODUCT 
+create or replace function find_product(
+	p_category_id int,
+	p_product_name text
+)returns table(
+	product_id int,
+	product_name text,
+	description text,
 	price money,
-	shop_id int,
-	address text
-)
-as $func$
-	begin
+	category_id int
+)as $$
+begin 
 	return query
-		select p.product_name,p.price,s.shop_id,s.address from shop s
-		join a_shop sa
-		on sa.shop_id = s.shop_id
-		join a
-		on a.product_shop_id = sa.product_shop_id
-		join a_product ap
-		on a.product_shop_id = ap.product_shop_id
-		join product p
-		on p.product_id = ap.product_id
-		where p.category_id = category_id_input and s.permission = true;
-	if not found then
-		return query
-		select 
-            'not_found'::VARCHAR(255) as product_name, 
-            null::MONEY as price, 
-            null::INT as shop_id, 
-            'not_found'::TEXT as shop_address;
-	end if;
-	end;
-$func$ language plpgsql;
-select * from find_product_by_category(13);
-
---3.Hàm này để kiểm tra xem trong shop có còn sản phẩm cần tìm không
-
-create type my_type as(
-	status int,
-	product_shop_id int
-);
-create or replace function check_stocks(in product_id_in int, in shop_id_in int,in quantity int)
-returns my_type
-as $$
-	declare result my_type;
-			quantity_aval int;
-	begin
-		result.status :=0;
-		result.product_shop_id := null;
---lấy số lượng và product_shop_id của sản phẩm cần tìm
-		select a.quantity, a.product_shop_id 
-		into quantity_aval, result.product_shop_id
-		from shop s
-		join a_shop sa on sa.shop_id = s.shop_id
-		join a on a.product_shop_id = sa.product_shop_id
-		join a_product ap on ap.product_shop_id = a.product_shop_id
-		join a_ware aw on aw.product_shop_id = a.product_shop_id
-		join warehouse w on w.warehouse_id = aw.warehouse_id
-		where ap.product_id = product_id_in
-		and	s.shop_id = shop_id_in
-		and a.quantity > 0;
-
---nếu không đủ hàng 
-	if quantity_aval < quantity then 
-		result.status := 2;
---nếu đủ hàng
-	elseif quantity_aval > quantity then 
-		result.status := 1;
---nếu không có hàng
-	else 
-		result.status := 0;
-	end if;
-	return result;
-	end;
-$$ language plpgsql;
-select * from check_stocks(676,541,100);
---4. Hàm này để đặt hàng
-create or replace function make_order(in product_id_in int,in shop_id_in int,in quantity_in int)
-returns text
-as $$
-		declare 
-			result my_type;
-			price money;
-begin 	
--- 	láy status,product_shop_id từ hàm check_stock
-	select status,product_shop_id from check_stocks(product_id_in, shop_id_in,quantity_in)
-	into result.status, result.product_shop_id;
-	
-	if result.status = 0 then return 'out_of_stock';
-	elseif result.status = 2 then return 'stock not sufficient';
-	else 
-	--giảm số lượng hàng trong kho đi 
-		update a
-		set quantity = quantity - quantity_in
-		where product_shop_id = result.product_shop_id;
-	-- tìm giá sản phẩm 
-		select p.price from  a
-		into price
-		join a_product ap on ap.product_shop_id = a.product_shop_id
-		join product p on p.product_id = ap.product_id
-		where a.product_shop_id = result.product_shop_id 
-		and p.product_id = product_id_in;
-	--thêm 1 order vào bảng order_
-		insert into order_(total_wo_tax, total_w_tax,status,order_date)
-		values(price, price*1.05, 'pending',current_timestamp);
-
-		return 'ordered';
-	end if;
+	select * from product p
+	where p.product_name = p_product_name and p.category_id = p_category_id;
 end;
 $$ language plpgsql;
-select make_order(676,541,3);
---5.Hàm để kiểm tra tài khoản và mật khẩu
+--3.CHECK FOR SUFFICIENT STOCKS
+create type ret_check as(
+	status int,
+	product_shop_id int 
+);
 
-create or replace function check_password(in customer_id_in int,in pass_word_in text)
-returns bool
+create or replace function check_stocks(
+	p_product_id int,
+	p_shop_id int,
+	p_quantity int
+)returns ret_check
+as $$ 
+declare 
+	v_a ret_check;
+	v_quantity int;
+begin
+	v_a.status := 0;
+	v_a.product_shop_id := null;
+	select ps.quantity,ps.product_shop_id
+	into v_quantity,v_a.product_shop_id from product_shop ps
+	where ps.product_id = p_product_id 
+	and ps.shop_id = p_shop_id
+	and ps.quantity > 0;
+--Neu khong du hang
+	if v_quantity < p_quantity then
+	v_a.status := 2;
+--Neu du hang
+	elseif v_quantity > p_quantity then
+	v_a.status := 1;
+--Neu khong co hang		
+	else 	
+	v_a.status := 0;
+	end if;
+	return v_a;
+end;
+$$ language plpgsql;
+select * from check_stocks(1,1,10);
+--4.MAKE ORDER
+CREATE OR REPLACE FUNCTION make_order_2(
+    customer_id INT,
+    shop_id INT,
+    product_id INT,
+    order_quantity INT
+) RETURNS TABLE (
+    order_id INT,
+    success BOOLEAN,
+    message TEXT
+) AS
+$$
+DECLARE
+    v_check_result RECORD;
+    v_order_id INT;
+    v_price NUMERIC;
+    v_total_wo_tax NUMERIC;
+    v_total_w_tax NUMERIC;
+BEGIN
+    -- Check product availability in the specified shop using check_stocks function
+    SELECT * INTO v_check_result FROM check_stocks(product_id, shop_id, order_quantity);
+
+    -- If not enough quantity is available
+    IF v_check_result.status = 2 THEN
+        RETURN QUERY SELECT NULL::INT, FALSE, 'Not enough quantity in stock'::TEXT;
+        RETURN;
+    ELSIF v_check_result.status = 0 THEN
+        RETURN QUERY SELECT NULL::INT, FALSE, 'Product not available in the shop'::TEXT;
+        RETURN;
+    END IF;
+
+    -- Get the product price
+    SELECT p.price INTO v_price
+    FROM product p
+    WHERE p.product_id = product_id;
+
+    -- Calculate total prices
+    v_total_wo_tax := v_price * order_quantity;
+    v_total_w_tax := v_total_wo_tax; -- Assuming no tax for simplicity, adjust as needed
+
+    -- Create a new order
+    INSERT INTO orders (status, total_with_tax, total_with_out_tax, order_date, cash, card, voucher, customer_id, product_id)
+    VALUES ('pending', v_total_w_tax, v_total_wo_tax, CURRENT_DATE, FALSE, FALSE, 0, customer_id, product_id)
+    RETURNING orders.order_id INTO v_order_id;
+
+    -- Reduce the quantity in the product_shop table
+    UPDATE product_shop
+    SET quantity = quantity - order_quantity
+    WHERE product_shop_id = v_check_result.product_shop_id;
+
+    -- Return the success message
+    RETURN QUERY SELECT v_order_id, TRUE, 'Order created successfully'::TEXT;
+END;
+$$ LANGUAGE plpgsql;
+-- select * from make_order(1,1,1,10000)
+-- select * from make_order(1,1,1,10)
+--5.CHECK FOR CUSTOMER ORDER
+CREATE OR REPLACE FUNCTION check_order(
+    p_customer_id INT
+) RETURNS TABLE(
+    customer_id INT,
+    order_id INT,
+    total_with_out_tax MONEY,
+    total_with_tax MONEY,
+    order_date DATE,
+    status TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        o.customer_id,
+        o.order_id,
+        o.total_with_out_tax,
+        o.total_with_tax,
+        o.order_date,
+        o.status
+    FROM orders AS o
+    WHERE o.customer_id = p_customer_id
+	ORDER BY o.order_date DESC;
+END;
+$$ LANGUAGE plpgsql;
+select * from check_order(1);
+--6.TRIGGER FOR UPDATE SHOP RATING
+CREATE OR REPLACE FUNCTION update_shop_rating()
+RETURNS TRIGGER AS $$
+DECLARE
+    total_star NUMERIC(3,2);
+BEGIN
+    -- Calculate the average rating for the shop
+    SELECT AVG(star) INTO total_star
+    FROM review
+    WHERE shop_id = NEW.shop_id;
+
+    -- Update the shop table with the new average rating
+    UPDATE shop
+    SET rating = total_star
+    WHERE shop_id = NEW.shop_id;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_update_shop_rating
+AFTER INSERT OR UPDATE ON review
+FOR EACH ROW
+EXECUTE FUNCTION update_shop_rating();
+INSERT INTO review (star, description, customer_id, product_id, shop_id)
+VALUES (4.5, 'Great product!', 1, 1, 1);
+select * from review;
+select * from shop;
+
+--7.CHECK CUSTOMER PASSWORD
+create or replace function check_password(
+	p_customer_id int,
+	p_password text
+)returns bool
 as $$
 	declare pwd text;
-begin
-	--Lấy mật khẩu từ customer_id
+begin 
 	select pass_word into pwd
 	from customer
-	where customer_id = customer_id_in;
+	where customer_id = p_customer_id;
 
-	--Nếu customer_id không tồn tại thì pass_word = null
 	if pwd is null then return false;
-	--Nếu mật khẩu đúng thì return true
-	elseif pwd = pass_word_in then return true;
-	--Nếu mật khẩu sai thì return false
+	elseif pwd = p_password then return true;
 	else return false;
 	end if;
 end;
 $$ language plpgsql;
 
---6.Hàm để update thông tin cá nhân
+--8.UPDATE CUSTOMER INFO
 create or replace function update_customer_info(
-	in customer_id_in int,
-	in old_password text,
-	in address_in text,
-	in fullname_in varchar(40),
-	in dob_in date,
-	in gender_in char,
-	in new_password text)
-	returns text
+	p_customer_id int,
+	p_old_password text,
+	p_address text,
+	p_fullname text,
+	p_dob date,
+	p_gender char,
+	p_new_password text
+)returns text
 as $$
-	declare id_ int;
-			passed bool;
-begin 
-	select check_password($1,$2) into passed;
-	
-	if passed = false then return 'Invalid username or password';
-	else
-	   update customer
+declare
+    passed BOOL;
+begin
+    -- Check if the old password is correct
+    select check_password(p_customer_id, p_old_password) INTO passed;
+    
+	   if passed = FALSE then
+        return 'Invalid username or password';
+    else
+        -- Update customer information using COALESCE to retain old values if new values are NULL
+        update customer
         set 
-            fullname = coalesce(fullname_in,fullname),
-            dob = coalesce(dob_in,dob),
-            gender = coalesce(gender_in,gender),
-            pass_word = coalesce(new_password,pass_word),
-            address = coalesce(address_in,address)
-        where customer_id = customer_id_in;
-		return 'updated';
-	end if;
+            address = coalesce(p_address, address),
+            fullname = coalesce(p_fullname, fullname),
+            dob = coalesce(p_dob, dob),
+            gender = coalesce(p_gender, gender),
+            pass_word = coalesce(p_new_password, pass_word)
+        where customer_id = p_customer_id;
+        return 'updated';
+    end if;
 end;
 $$ language plpgsql;
 
---7.Hàm xác nhận đơn hàng của 1 đơn hàng đang chờ
-+y tuong: khi khach hang xac nhan phuong thuc thanh toan thi se chuyen trang thai tu pending sang delivering
-+ ghi order_id va hinh thuc thanh toan vao ham (cash hoac card);
-create or replace function xac_nhan_don_hang(id_ INT, form VARCHAR(40))
-returns TABLE (
-    order_id INT,
+--9.CHECK ORDER PAYMENT
+CREATE OR REPLACE FUNCTION check_order_payment(
+	p_id int,
+	form varchar(10)
+)
+RETURNS TABLE(
+ order_id INT,
     total_wo_tax MONEY,
     total_w_tax MONEY,
-    status VARCHAR(40),
+    status TEXT,
     order_date DATE
-)
-as
-$$
-begin
+) AS $$
+BEGIN
+    -- Update the payment method in the orders table
     IF form = 'card' THEN
-        UPDATE payment
-        SET card = 'true'
-        where payment.order_id = id_;
+        UPDATE orders
+        SET card = TRUE
+        WHERE orders.order_id = p_id;
     ELSE 
-        UPDATE payment
-        SET cash = 'true'
-        where payment.order_id = id_;
-    end IF;
+        UPDATE orders
+        SET cash = TRUE
+        WHERE orders.order_id = p_id;
+    END IF;
 
-    UPDATE order_
+    -- Update the order status to 'delivering'
+    UPDATE orders
     SET status = 'delivering'
-    where order_.order_id = id_;
+    WHERE orders.order_id = p_id;
 
-    return QUERY
-    select * from order_
-	where order_.order_id = id_;
-  
-end;
-$$
-language plpgsql;
-
-select * from xac_nhan_don_hang(1,'cash');
-----------------------------------------------
---8.Hàm hủy shop khi shop có sao quá thấp
-create or replace function huy_shop()
-returns text
-language plpgsql
-as $$
-begin
-    DELETE from shop
-    where rating < 2 AND permission = false;
-    return 'finish';
-end;
-$$;
------------------------------------------------
---9.Hàm tạo shop mới
-create or replace function insert_new_shop(
-    IN address text,
-    IN rating numeric(3,2)
+    -- Return the updated order details
+    RETURN QUERY
+    SELECT o.order_id::INT, 
+           o.total_with_out_tax::MONEY, 
+           o.total_with_tax::MONEY, 
+           o.status::TEXT, 
+           o.order_date::DATE
+    FROM orders o
+    WHERE o.order_id = p_id;
+END;
+$$ LANGUAGE plpgsql;
+--10. TRIGGER TO DELETE SHOP
+CREATE OR REPLACE FUNCTION set_shop_permission_false()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Check the rating of the shop associated with the new review
+    IF (SELECT rating FROM shop WHERE shop_id = NEW.shop_id) < 3 THEN
+        -- Set the shop's permission to false
+        UPDATE shop
+        SET permission = FALSE
+        WHERE shop_id = NEW.shop_id;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_set_shop_permission_false
+AFTER INSERT ON review
+FOR EACH ROW
+EXECUTE FUNCTION set_shop_permission_false();
+--11. GET TOP SELLING PRODUCT BY YEAR
+CREATE OR REPLACE FUNCTION top_selling_products_by_year(p_shop_id INT, p_year INT)
+RETURNS TABLE (
+    product_id INT,
+    product_name TEXT,
+    total_quantity int
 )
-returns TEXT
-language plpgsql
-as $$
-declare
-    s1 TEXT;
-begin
-    insert into shop (permission, address, rating)
-    values (true, address, rating);
-
-    s1 := 'Insert successfully';
-    return s1;
-exception
-    WHEN unique_violation THEN
-        return 'Insert failed: duplicate key value violates unique constraint';
-    WHEN OTHERS THEN
-        return 'Insert failed: ' || SQLERRM;
-end;
-$$;
-
-select * from insert_new_shop('789 Trade St',5)
------------------------------------------------------
---------------------------------------------
------------------------------------------------
---10.Hàm kiểm tra tổng số lượng sản phẩm trong từng kho
-create or replace function check_tong_sl_sp ()
-returns TABLE (id_warehouse INT, sl_sp bigINT)
-as
+AS
 $$
-begin
-    return QUERY
-    select 
-        a_ware.warehouse_id as id_warehouse, 
-        SUM(product_shop.quantity) as sl_sp 
-    from 
-        product_shop 
-    join 
-        a_ware 
-    ON 
-        product_shop.product_shop_id = a_ware.product_shop_id
-    group by 
-        a_ware.warehouse_id;
-end;
+BEGIN
+    RETURN QUERY
+    SELECT 
+        p.product_id,
+        p.product_name,
+        SUM(ps.quantity)::INT AS total_quantity
+    FROM 
+        product p
+    JOIN 
+        product_shop ps ON p.product_id = ps.product_id
+    JOIN 
+        orders o ON ps.product_id = o.product_id
+    WHERE 
+        ps.shop_id = p_shop_id
+        AND EXTRACT(YEAR FROM o.order_date) = p_year
+    GROUP BY 
+        p.product_id, p.product_name
+    ORDER BY 
+        total_quantity DESC
+    LIMIT 10;  -- Limit to top 10 selling products
+END;
 $$
-language plpgsql;
-
--- Execute the function to see the results
-select * from check_tong_sl_sp();
-----------------------------------------------------
---10.Hàm thêm sản phẩm với tất cả trường hợp ( không quan tâm kho đầy hay không)
-
---10.1Hàm phụ để trả về product_shop_id IN(product_id,shop_id) trả về -1 nếu không tìm được 
-
-create or replace function get_product_shop_id(
+LANGUAGE plpgsql;
+--12. GET TOTAL NUMBER OF STROCK IN EACH WAREHOUSE
+CREATE OR REPLACE FUNCTION check_tong_sl_sp ()
+RETURNS TABLE (id_warehouse int, sl_sp int)
+AS
+$$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        ps.warehouse_id AS id_warehouse, 
+        SUM(ps.quantity)::int AS sl_sp 
+    FROM 
+        product_shop ps
+    GROUP BY 
+        ps.warehouse_id;
+END;
+$$
+LANGUAGE plpgsql;
+select * from check_tong_sl_sp()
+--13.GET PRODUCT SHOP ID
+CREATE OR REPLACE FUNCTION get_product_shop_id(
     p_product_id INT,
-    p_shop_id INT
-) returns INT as $$
-declare
+    p_shop_id INT,
+    p_warehouse_id INT
+) RETURNS INT AS $$
+DECLARE
     v_product_shop_id INT;
-begin
-    -- Find the product_shop_id using the product_id and shop_id
-    select ps.product_shop_id
-    into v_product_shop_id
-    from Product_Shop ps
-    join a_shop ashop ON ps.product_shop_id = ashop.product_shop_id
-    where ps.product_id = p_product_id AND ashop.shop_id = p_shop_id;
+BEGIN
+    -- Find the product_shop_id using the product_id, shop_id, and customer_id
+    SELECT ps.product_shop_id
+    INTO v_product_shop_id
+    FROM product_shop ps
+    WHERE ps.product_id = p_product_id 
+      AND ps.shop_id = p_shop_id 
+      AND ps.warehouse_id = p_warehouse_id ;
 
-    -- If no match is found, return NULL
+    -- If no match is found, return -1
     IF NOT FOUND THEN
-        return -1;
-    end IF;
+        RETURN -1;
+    END IF;
 
-    -- return the found product_shop_id
-    return v_product_shop_id;
-end;
-$$ language plpgsql;
-select get_product_shop_id(1,1)
-----------------------------------------------------
-
---10.2Hàm thêm sản phẩm với tất cả trường hợp ( quan tâm kho đầy hay không) IN (shop_id ,warehouse_id,product_name,category_id,price,description,quantity)
-
-
-create or replace function add_product_to_shop(
-    p_shop_id int,
-    p_product_name varchar(225),
-    p_category_id int,
-    p_price numeric,
-    p_description text,
-    p_quantity int
-) returns return_ware as
-$$
-declare
+    -- Return the found product_shop_id
+    RETURN v_product_shop_id;
+END;
+$$ LANGUAGE plpgsql;
+--14. CHECK WAREHOUSE FULL
+CREATE OR REPLACE FUNCTION check_ware_full(
+    p_warehouse_id int
+) RETURNS int
+AS $$
+DECLARE
+    total_quantity bigint;
+BEGIN
+	
+    SELECT COALESCE(SUM(ps.quantity), 0)::int
+    INTO total_quantity
+    FROM product_shop ps
+	where ps.warehouse_id = p_warehouse_id;
+    RETURN total_quantity;
+END;
+$$ LANGUAGE plpgsql;
+--15. UPDATE NEW PRODUCT
+CREATE OR REPLACE FUNCTION add_product_to_shop(
+    p_shop_id INT,
+    p_product_name TEXT,
+    p_category_id INT,
+    p_price MONEY,
+    p_description TEXT,
+    p_quantity INT,
+    p_warehouse_id INT
+) RETURNS TEXT AS $$
+DECLARE 
     v_product_id INT;
     v_product_shop_id INT;
-	v_val return_ware;
-begin
-    -- Kiem tra xem product co trong product table chua
-   	select product_id into v_product_id
-    from product
-    where product_name = p_product_name and category_id = p_category_id;
+BEGIN
+    -- Kiem tra xem product da co trong bang Product chua
+    SELECT product_id INTO v_product_id 
+    FROM product
+    WHERE product_name = p_product_name AND category_id = p_category_id;
 
-    -- Neu product chua co ->insert vao
-   	if v_product_id is null then
-        insert into product (price, description, product_name, category_id)
-        values (p_price, p_description, p_product_name, p_category_id)
-        returning product_id into v_product_id;
-    end if;
+    IF v_product_id IS NULL THEN
+        INSERT INTO product (price, product_name, category_id, description)
+        VALUES (p_price, p_product_name, p_category_id, p_description)
+        RETURNING product_id INTO v_product_id;
+    END IF;
 
-    -- Kiem tra xem da ton tai product_shop_id chua
-    select get_product_shop_id(v_product_id,p_shop_id) into v_product_shop_id;
+    -- Kiem tra xem da co product_shop_id cua san phan chua
+    SELECT get_product_shop_id(v_product_id, p_shop_id, p_warehouse_id) INTO v_product_shop_id;
 
-    -- Neu chua ton tai product_shop_id thi insert vao
-    if v_product_shop_id < 0 then
-        insert into product_shop (quantity, product_id)
-        values (p_quantity, v_product_id)
-        returning product_shop_id into v_product_shop_id;
-    else
-        --Neu ton tai roi thi chi cap nhat so luong
-        update Product_Shop
-        set quantity = quantity + p_quantity
-       	where product_shop_id = v_product_shop_id;
-    end if;
+    -- Kiem tra xem co du cho chua trong kho khong
+    IF v_product_shop_id > 0 THEN
+        -- Neu product_shop_id co roi thi chi tang so luong
+        IF check_ware_full(p_warehouse_id) + p_quantity <= 100000 THEN
+            UPDATE product_shop
+            SET quantity = quantity + p_quantity
+            WHERE product_shop_id = v_product_shop_id;
+            RETURN 'UPDATED';
+        ELSE
+            RETURN 'WAREHOUSE NOT SUFFICIENT';
+        END IF;
+    ELSE
+        -- Neu chua co thi insert vao 
+        IF check_ware_full(p_warehouse_id) + p_quantity <= 100000 THEN
+            INSERT INTO product_shop (quantity, warehouse_id, shop_id, product_id)
+            VALUES (p_quantity, p_warehouse_id, p_shop_id, v_product_id)
+            RETURNING product_shop_id INTO v_product_shop_id;
+            RETURN 'UPDATED';
+        ELSE
+            RETURN 'WAREHOUSE NOT SUFFICIENT';
+        END IF;
+    END IF;
 
-    -- Insert a_shop
-    insert into a_shop (shop_id, product_shop_id)
-   	values (p_shop_id, v_product_shop_id)
-    on conflict (shop_id, product_shop_id) do nothing;
-
-    -- Insert a_ware
-	select loop_ware(p_quantity) into v_val.ware_id;
-	
-    insert into a_ware (warehouse_id, product_shop_id, in_date)
-   	values (v_val.ware_id, v_product_shop_id, current_date)
-    on conflict (warehouse_id, product_shop_id) do nothing;
-	v_val.out_text := 'Insert success';
-	return v_val;
-exception
-	when others then
-	return 'Insert failed: '||SQLERRM;
-end;
-$$
-language plpgsql;
-
-select * from add_product_to_shop(4,'Time',1,100.0,'Good Time',100);
-select * from product_shop
---10.3. Hàm tính số lượng sản phẩm của từng kho
-create type ware as(
-	id_ int;
-	quantity int;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN 'Insert failed: ' || SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
+--16.ADD NEW SHOP 
+CREATE OR REPLACE FUNCTION insert_new_shop(
+    p_address text,
+    p_rating numeric(3,2)
 )
-create or replace function check_ware_full(
-	p_warehouse_id int
-)returns numeric as $$
-declare
-		v ware;
-		total numeric := 0;
-begin 
-	for v in 
-		select ps.product_shop_id,ps.quantity
-		from a_ware aw join product_shop ps on ps.product_shop_id = aw.product_shop_id
-		where aw.warehouse_id = p_warehouse_id
-	loop
-		total := total + v.quantity;
-end loop;
-	return total;
-end;
- $$ language plpgsql;
- --10.4 . Hàm để duyệt qua tất cả các kho 
- create or replace function loop_ware(
-	in p_quantity int
-)
-returns numeric
-as $$
-declare 
-	w int;
-	total numeric;
-begin 
-	for w in
-		select warehouse_id from a_ware aw
-		order by warehouse_id desc;
-	loop
-		select check_ware_full(w)
-		into total;
-		if total + p_quantity < 10000 then
-		return w;
-		end if;
-	end loop;
-return -1;
-end;
-$$ language plpgsql;
-select loop_ware(10000-400);
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    s1 TEXT;
+BEGIN
+    INSERT INTO shop (permission, address, rating)
+    VALUES (true, p_address, p_rating);
 
---------------------------------------------
---11.Viết hàm xác nhận đơn hàng hoặc hủy
-Nếu hủy thì cập nhật lại vào số lượng trong kho
-create or replace function confirmed_or_cancel(
+    s1 := 'Insert successfully';
+    RETURN s1;
+EXCEPTION
+    WHEN unique_violation THEN
+        RETURN 'Insert failed: duplicate key value violates unique constraint';
+    WHEN OTHERS THEN
+        RETURN 'Insert failed: ' || SQLERRM;
+END;
+$$;
+--17.CANCEL ORDER
+CREATE OR REPLACE FUNCTION confirmed_or_cancel(
     id_order INT, 
-    new_status TEXT
+    new_status TEXT,
+	p_product_shop_id INT
 ) 
-returns TABLE (
+RETURNS TABLE (
     order_id INT,
     total_wo_tax MONEY,
     total_w_tax MONEY,
     order_date DATE,
     status TEXT
 )
-as $$
-declare
+AS $$
+DECLARE
     quan INT;
-begin
+BEGIN
     -- Update the status of the order
-    UPDATE "Order"
+    UPDATE orders
     SET status = new_status
-    where "Order".order_id = id_order;
+    WHERE orders.order_id = id_order;
 
     -- Check if the new_status is 'cancelled'
-    IF new_status = 'cancelled' THEN
+    IF new_status = 'cancel' THEN
         -- Get the quantity
-        select quantity into quan
-        from a_order
-        where a_order.order_id = id_order;
+        SELECT quantity INTO quan
+        FROM orders o
+        WHERE o.order_id = id_order;
 
+		
         -- Update the quantity in the product_shop table
         UPDATE Product_Shop
         SET quantity = quantity + quan
-        where product_shop_id IN (
-            select product_shop_id 
-            from a_order 
-            where a_order.order_id = id_order
-        );
-    end IF;
+        WHERE product_shop_id = p_product_shop_id;
+    END IF;
 
-    -- return the updated order details
-    return QUERY 
-    select 
+    -- Return the updated order details
+    RETURN QUERY 
+    SELECT 
         o.order_id, 
-        o.total_wo_tax, 
-        o.total_w_tax, 
+        o.total_with_out_tax, 
+        o.total_with_tax, 
         o.order_date, 
         o.status 
-    from "Order" o 
-    where o.order_id = id_order;
-end;
-$$ language plpgsql;
-select * from confirmed_or_cancel (3,'cancelled')
-
---------------------------------------------------------------------
----------------12.Hàm để kiểm tra trong 1 kho có những mặt hàng gì----------
-create or replace function check_warehouse(
-	p_warehouse_id int
-)returns table(
-	product_name varchar(225),
-	description text,
-	quantity int
+    FROM orders o 
+    WHERE o.order_id = id_order;
+END;
+$$ LANGUAGE plpgsql;
+--INSERT INTO orders (status, total_with_tax, total_with_out_tax, order_date, cash, card, voucher, customer_id, product_id,quantity)
+--VALUES ('pending', 120.50, 100.00, CURRENT_DATE, TRUE, FALSE, 10, 1, 2,100);
+--select * from confirmed_or_cancel(10,'cancel',2)
+--18.CHECK REVENUE BY MONTH
+CREATE OR REPLACE FUNCTION revenue_by_month(id_ INT)
+RETURNS TABLE (
+   	shop_id INT,
+    year_month TEXT,
+    total_revenue MONEY
 )
-as $$
-	begin 
-	return query
-	select p.product_name, p.description, ps.quantity 
-	from product p 
+AS
+$$
+BEGIN
+    RETURN QUERY
+	select ps.shop_id, 
+	TO_CHAR(o.order_date, 'YYYY-MM') AS year_month,
+    SUM(o.total_with_tax) AS total_revenue
+	from orders o 
+	join product p on p.product_id = o.product_id
 	join product_shop ps on ps.product_id = p.product_id
-	join a_ware aw on aw.product_shop_id = ps.product_shop_id
-	where aw.warehouse_id = p_warehouse_id;
-end;
-$$ language plpgsql;
-select * from check_warehouse(3);
---12.1. Hàm đưa ra sản phẩm của từng kho
-
-create or replace function check_warehouse(
-	p_warehouse_id int
-)returns table(
-	product_name varchar(225),
-	description text,
-	quantity int
-)
-as $$
-	begin 
-	return query
-	select p.product_name, p.description, ps.quantity 
-	from product p 
-	join product_shop ps on ps.product_id = p.product_id
-	join a_ware aw on aw.product_shop_id = ps.product_shop_id
-	where aw.warehouse_id = p_warehouse_id;
-end;
-$$ language plpgsql;
-select * from check_warehouse(1);
+	where ps.shop_id = id_
+	group by ps.shop_id,TO_CHAR(o.order_date, 'YYYY-MM')
+	order by year_month;
+END;
+$$
+LANGUAGE plpgsql;
