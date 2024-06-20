@@ -466,3 +466,55 @@ EXCEPTION
         RETURN 'Insert failed: ' || SQLERRM;
 END;
 $$;
+--17.CANCEL ORDER
+CREATE OR REPLACE FUNCTION confirmed_or_cancel(
+    id_order INT, 
+    new_status TEXT,
+	p_product_shop_id INT
+) 
+RETURNS TABLE (
+    order_id INT,
+    total_wo_tax MONEY,
+    total_w_tax MONEY,
+    order_date DATE,
+    status TEXT
+)
+AS $$
+DECLARE
+    quan INT;
+BEGIN
+    -- Update the status of the order
+    UPDATE orders
+    SET status = new_status
+    WHERE orders.order_id = id_order;
+
+    -- Check if the new_status is 'cancelled'
+    IF new_status = 'cancel' THEN
+        -- Get the quantity
+        SELECT quantity INTO quan
+        FROM orders o
+        WHERE o.order_id = id_order;
+
+		
+        -- Update the quantity in the product_shop table
+        UPDATE Product_Shop
+        SET quantity = quantity + quan
+        WHERE product_shop_id = p_product_shop_id;
+    END IF;
+
+    -- Return the updated order details
+    RETURN QUERY 
+    SELECT 
+        o.order_id, 
+        o.total_with_out_tax, 
+        o.total_with_tax, 
+        o.order_date, 
+        o.status 
+    FROM orders o 
+    WHERE o.order_id = id_order;
+END;
+$$ LANGUAGE plpgsql;
+--INSERT INTO orders (status, total_with_tax, total_with_out_tax, order_date, cash, card, voucher, customer_id, product_id,quantity)
+--VALUES ('pending', 120.50, 100.00, CURRENT_DATE, TRUE, FALSE, 10, 1, 2,100);
+--select * from confirmed_or_cancel(10,'cancel',2)
+
