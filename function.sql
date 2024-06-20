@@ -182,3 +182,24 @@ INSERT INTO review (star, description, customer_id, product_id, shop_id)
 VALUES (4.5, 'Great product!', 1, 1, 1);
 select * from review;
 select * from shop;
+
+--7.CHECK CUSTOMER PASSWORD
+create or replace function check_password(
+	p_customer_id int,
+	p_password text
+)returns bool
+as $$
+	declare pwd text;
+begin 
+	select pass_word into pwd
+	from customer
+	where customer_id = p_customer_id;
+
+	if pwd is null then return false;
+	elseif pwd = p_password then return true;
+	else return false;
+	end if;
+end;
+$$ language plpgsql;
+
+--8.
