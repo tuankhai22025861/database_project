@@ -202,4 +202,37 @@ begin
 end;
 $$ language plpgsql;
 
---8.
+--8.UPDATE CUSTOMER INFO
+create or replace function update_customer_info(
+	p_customer_id int,
+	p_old_password text,
+	p_address text,
+	p_fullname text,
+	p_dob date,
+	p_gender char,
+	p_new_password text
+)returns text
+as $$
+declare
+    passed BOOL;
+begin
+    -- Check if the old password is correct
+    select check_password(p_customer_id, p_old_password) INTO passed;
+    
+	   if passed = FALSE then
+        return 'Invalid username or password';
+    else
+        -- Update customer information using COALESCE to retain old values if new values are NULL
+        update customer
+        set 
+            address = coalesce(p_address, address),
+            fullname = coalesce(p_fullname, fullname),
+            dob = coalesce(p_dob, dob),
+            gender = coalesce(p_gender, gender),
+            pass_word = coalesce(p_new_password, pass_word)
+        where customer_id = p_customer_id;
+        return 'updated';
+    end if;
+end;
+$$ language plpgsql;
+
