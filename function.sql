@@ -373,3 +373,19 @@ BEGIN
     RETURN v_product_shop_id;
 END;
 $$ LANGUAGE plpgsql;
+--13. CHECK WAREHOUSE FULL
+CREATE OR REPLACE FUNCTION check_ware_full(
+    p_warehouse_id int
+) RETURNS int
+AS $$
+DECLARE
+    total_quantity bigint;
+BEGIN
+	
+    SELECT COALESCE(SUM(ps.quantity), 0)::int
+    INTO total_quantity
+    FROM product_shop ps
+	where ps.warehouse_id = p_warehouse_id;
+    RETURN total_quantity;
+END;
+$$ LANGUAGE plpgsql;
