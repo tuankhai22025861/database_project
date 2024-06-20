@@ -349,7 +349,7 @@ select * from check_tong_sl_sp()
 CREATE OR REPLACE FUNCTION get_product_shop_id(
     p_product_id INT,
     p_shop_id INT,
-    p_customer_id INT
+    p_warehouse_id INT
 ) RETURNS INT AS $$
 DECLARE
     v_product_shop_id INT;
@@ -358,11 +358,9 @@ BEGIN
     SELECT ps.product_shop_id
     INTO v_product_shop_id
     FROM product_shop ps
-    JOIN orders o ON ps.product_id = o.product_id
-    JOIN shop s ON ps.shop_id = s.shop_id
     WHERE ps.product_id = p_product_id 
-      AND s.shop_id = p_shop_id 
-      AND o.customer_id = p_customer_id;
+      AND ps.shop_id = p_shop_id 
+      AND ps.warehouse_id = p_warehouse_id ;
 
     -- If no match is found, return -1
     IF NOT FOUND THEN
@@ -387,5 +385,61 @@ BEGIN
     FROM product_shop ps
 	where ps.warehouse_id = p_warehouse_id;
     RETURN total_quantity;
+END;
+$$ LANGUAGE plpgsql;
+--15. UPDATE NEW PRODUCT
+CREATE OR REPLACE FUNCTION add_product_to_shop(
+    p_shop_id INT,
+    p_product_name TEXT,
+    p_category_id INT,
+    p_price MONEY,
+    p_description TEXT,
+    p_quantity INT,
+    p_warehouse_id INT
+) RETURNS TEXT AS $$
+DECLARE 
+    v_product_id INT;
+    v_product_shop_id INT;
+BEGIN
+    -- Kiem tra xem product da co trong bang Product chua
+    SELECT product_id INTO v_product_id 
+    FROM product
+    WHERE product_name = p_product_name AND category_id = p_category_id;
+
+    IF v_product_id IS NULL THEN
+        INSERT INTO product (price, product_name, category_id, description)
+        VALUES (p_price, p_product_name, p_category_id, p_description)
+        RETURNING product_id INTO v_product_id;
+    END IF;
+
+    -- Kiem tra xem da co product_shop_id cua san phan chua
+    SELECT get_product_shop_id(v_product_id, p_shop_id, p_warehouse_id) INTO v_product_shop_id;
+
+    -- Kiem tra xem co du cho chua trong kho khong
+    IF v_product_shop_id > 0 THEN
+        -- Neu product_shop_id co roi thi chi tang so luong
+        IF check_ware_full(p_warehouse_id) + p_quantity <= 100000 THEN
+            UPDATE product_shop
+            SET quantity = quantity + p_quantity
+            WHERE product_shop_id = v_product_shop_id;
+            RETURN 'UPDATED';
+        ELSE
+            RETURN 'WAREHOUSE NOT SUFFICIENT';
+        END IF;
+    ELSE
+        -- Neu chua co thi insert vao 
+        IF check_ware_full(p_warehouse_id) + p_quantity <= 100000 THEN
+            INSERT INTO product_shop (quantity, warehouse_id, shop_id, product_id)
+            VALUES (p_quantity, p_warehouse_id, p_shop_id, v_product_id)
+            RETURNING product_shop_id INTO v_product_shop_id;
+            RETURN 'UPDATED';
+        ELSE
+            RETURN 'WAREHOUSE NOT SUFFICIENT';
+        END IF;
+    END IF;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN 'Insert failed: ' || SQLERRM;
 END;
 $$ LANGUAGE plpgsql;
