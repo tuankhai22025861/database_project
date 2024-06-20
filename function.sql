@@ -327,3 +327,21 @@ BEGIN
 END;
 $$
 LANGUAGE plpgsql;
+--12. GET TOTAL NUMBER OF STROCK IN EACH WAREHOUSE
+CREATE OR REPLACE FUNCTION check_tong_sl_sp ()
+RETURNS TABLE (id_warehouse int, sl_sp int)
+AS
+$$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        ps.warehouse_id AS id_warehouse, 
+        SUM(ps.quantity)::int AS sl_sp 
+    FROM 
+        product_shop ps
+    GROUP BY 
+        ps.warehouse_id;
+END;
+$$
+LANGUAGE plpgsql;
+select * from check_tong_sl_sp()
