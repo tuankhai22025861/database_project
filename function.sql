@@ -345,3 +345,31 @@ END;
 $$
 LANGUAGE plpgsql;
 select * from check_tong_sl_sp()
+--13.GET PRODUCT SHOP ID
+CREATE OR REPLACE FUNCTION get_product_shop_id(
+    p_product_id INT,
+    p_shop_id INT,
+    p_customer_id INT
+) RETURNS INT AS $$
+DECLARE
+    v_product_shop_id INT;
+BEGIN
+    -- Find the product_shop_id using the product_id, shop_id, and customer_id
+    SELECT ps.product_shop_id
+    INTO v_product_shop_id
+    FROM product_shop ps
+    JOIN orders o ON ps.product_id = o.product_id
+    JOIN shop s ON ps.shop_id = s.shop_id
+    WHERE ps.product_id = p_product_id 
+      AND s.shop_id = p_shop_id 
+      AND o.customer_id = p_customer_id;
+
+    -- If no match is found, return -1
+    IF NOT FOUND THEN
+        RETURN -1;
+    END IF;
+
+    -- Return the found product_shop_id
+    RETURN v_product_shop_id;
+END;
+$$ LANGUAGE plpgsql;
