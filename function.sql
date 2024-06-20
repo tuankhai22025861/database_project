@@ -345,7 +345,7 @@ END;
 $$
 LANGUAGE plpgsql;
 select * from check_tong_sl_sp()
---14.GET PRODUCT SHOP ID
+--13.GET PRODUCT SHOP ID
 CREATE OR REPLACE FUNCTION get_product_shop_id(
     p_product_id INT,
     p_shop_id INT,
@@ -371,7 +371,7 @@ BEGIN
     RETURN v_product_shop_id;
 END;
 $$ LANGUAGE plpgsql;
---15. CHECK WAREHOUSE FULL
+--14. CHECK WAREHOUSE FULL
 CREATE OR REPLACE FUNCTION check_ware_full(
     p_warehouse_id int
 ) RETURNS int
@@ -387,7 +387,7 @@ BEGIN
     RETURN total_quantity;
 END;
 $$ LANGUAGE plpgsql;
---13. UPDATE NEW PRODUCT
+--15. UPDATE NEW PRODUCT
 CREATE OR REPLACE FUNCTION add_product_to_shop(
     p_shop_id INT,
     p_product_name TEXT,
@@ -443,3 +443,26 @@ EXCEPTION
         RETURN 'Insert failed: ' || SQLERRM;
 END;
 $$ LANGUAGE plpgsql;
+--16.ADD NEW SHOP 
+CREATE OR REPLACE FUNCTION insert_new_shop(
+    p_address text,
+    p_rating numeric(3,2)
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    s1 TEXT;
+BEGIN
+    INSERT INTO shop (permission, address, rating)
+    VALUES (true, p_address, p_rating);
+
+    s1 := 'Insert successfully';
+    RETURN s1;
+EXCEPTION
+    WHEN unique_violation THEN
+        RETURN 'Insert failed: duplicate key value violates unique constraint';
+    WHEN OTHERS THEN
+        RETURN 'Insert failed: ' || SQLERRM;
+END;
+$$;
