@@ -1,0 +1,61 @@
+create table customer(
+	customer_id serial primary key,
+	address text,
+	fullname text,
+	dob date,
+	gender char check(gender = 'M' or gender = 'F'),
+	rating numeric(2,1) default 5,
+	pass_word text
+);
+create table category(
+	category_id serial primary key,
+	category_name text
+);
+create table product(
+	product_id serial primary key,
+	product_name text,
+	description text,
+	price money,
+	category_id int references category(category_id)
+);
+create table shop(
+	shop_id serial primary key,
+	rating numeric(2,1) default 5,
+	address text,
+	permission bool
+);
+create table warehouse(
+	warehouse_id serial primary key,
+	in_date date,
+	out_date date,
+	address text,
+	sold int
+);
+create table review(
+	review_id serial primary key,
+	star numeric(2,1),
+	description text,
+	customer_id int references customer(customer_id),
+	product_id int references product(product_id),
+	shop_id int references shop(shop_id)
+);
+create table product_shop(
+	product_shop_id serial primary key,
+	quantity int,
+	product_id int references product(product_id),
+	warehouse_id int references warehouse(warehouse_id),
+	shop_id int references shop(shop_id)
+);
+create table orders(
+	order_id serial primary key,
+	status text check(status in('pending','confirmed','delivering','delivered','cancel')),
+	total_with_tax money,
+	total_with_out_tax money,
+	order_date date,
+	cash bool,
+	card bool,
+	voucher int,
+	quantity int,
+	customer_id int references customer(customer_id),
+	product_id int references product(product_id)
+);
