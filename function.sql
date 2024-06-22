@@ -540,3 +540,152 @@ BEGIN
 END;
 $$
 LANGUAGE plpgsql;
+
+--ham insert_new_customer với hiệu suất kém hơn
+create or replace function insert_new_customer(
+    p_address text,
+    p_fullname text,
+    p_dob date,
+    p_gender char(1),
+    p_pass_word text
+) returns text
+as $$
+declare
+    v_temp text;
+begin
+    select 'dummy' into v_temp;
+
+    -- Insert the new customer
+    insert into customer(address, fullname, dob, gender, pass_word)
+    values(p_address, p_fullname, p_dob, p_gender, p_pass_word);
+
+    return 'Insert successfully';
+    
+exception
+    when others then
+    return 'Insert failed: ' || SQLERRM;
+end;
+$$ language plpgsql;
+---------------------------------------------
+--ham check_order_payment vs hiệu suất kém hơn
+CREATE OR REPLACE FUNCTION check_order_payment(
+    p_id int,
+    form varchar(10)
+)
+RETURNS TABLE(
+    order_id INT,
+    total_wo_tax MONEY,
+    total_w_tax MONEY,
+    status TEXT,
+    order_date DATE
+) AS $$
+DECLARE
+    dummy_var INT;
+BEGIN
+    -- Introduce unnecessary variable assignment for inefficiency
+    SELECT o.order_id INTO dummy_var FROM orders o WHERE o.order_id = p_id;
+
+    -- Update the payment method in the orders table
+    IF form = 'card' THEN
+        UPDATE orders
+        SET card = TRUE
+        WHERE orders.order_id = p_id;
+    ELSE 
+        UPDATE orders
+        SET cash = TRUE
+        WHERE orders.order_id = p_id;
+    END IF;
+    SELECT o.order_id INTO dummy_var FROM orders o WHERE o.order_id = p_id;
+
+    -- Update the order status to 'delivering'
+    UPDATE orders
+    SET status = 'delivering'
+    WHERE orders.order_id = p_id;
+
+    SELECT o.order_id INTO dummy_var FROM orders o WHERE o.order_id = p_id;
+
+    -- Return the updated order details
+    RETURN QUERY
+    SELECT o.order_id::INT, 
+           o.total_with_out_tax::MONEY, 
+           o.total_with_tax::MONEY, 
+           o.status::TEXT, 
+           o.order_date::DATE
+    FROM orders o
+    WHERE o.order_id = p_id;
+END;
+$$ LANGUAGE plpgsql
+
+--ham top_selling_product_by_year hiệu suất kém hơn
+CREATE OR REPLACE FUNCTION top_selling_products_by_year(p_shop_id INT, p_year INT)
+RETURNS TABLE (
+    product_id INT,
+    product_name TEXT,
+    total_quantity INT
+)
+AS
+$$
+DECLARE
+    dummy_var INT;
+BEGIN
+    -- Introduce unnecessary variable assignment for inefficiency
+    SELECT p.product_id INTO dummy_var
+    FROM product p
+    JOIN product_shop ps ON p.product_id = ps.product_id
+    JOIN orders o ON ps.product_id = o.product_id
+    WHERE ps.shop_id = p_shop_id
+    AND EXTRACT(YEAR FROM o.order_date) = p_year
+    LIMIT 1;
+
+    RETURN QUERY
+    SELECT 
+        p.product_id,
+        p.product_name,
+        SUM(ps.quantity)::INT AS total_quantity
+    FROM 
+        product p
+    JOIN 
+        product_shop ps ON p.product_id = ps.product_id
+    JOIN 
+        orders o ON ps.product_id = o.product_id
+    WHERE 
+        ps.shop_id = p_shop_id
+        AND EXTRACT(YEAR FROM o.order_date) = p_year
+    GROUP BY 
+        p.product_id, p.product_name
+    ORDER BY 
+        total_quantity DESC;
+END;
+$$
+LANGUAGE plpgsql;
+
+--hàm check_tong_sl_sp vs hiệu tốt 
+CREATE OR REPLACE FUNCTION check_tong_sl_sp()
+RETURNS TABLE (id_warehouse INT, sl_sp INT)
+AS
+$$
+DECLARE
+    dummy_var INT;
+BEGIN
+    -- Introduce unnecessary variable assignment for inefficiency
+    SELECT warehouse_id INTO dummy_var
+    FROM product_shop
+    LIMIT 1;
+
+    RETURN QUERY
+    SELECT 
+        ps.warehouse_id AS id_warehouse, 
+        SUM(ps.quantity)::INT AS sl_sp 
+    FROM 
+        product_shop ps
+    GROUP BY 
+        ps.warehouse_id;
+    SELECT warehouse_id INTO dummy_var
+    FROM product_shop
+    LIMIT 1;
+END;
+$$
+LANGUAGE plpgsql;
+
+
+
