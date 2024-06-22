@@ -25,4 +25,4 @@ SELECT
     floor(random() * 70) + 1 AS customer_id,
     floor(random() * 900) + 1 AS product_id,
     floor(random() * 100) + 1 AS shop_id
-FROM generate_series(1, 100);
+FROM generate_series(1, 10000);
