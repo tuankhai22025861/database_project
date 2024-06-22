@@ -16,4 +16,4 @@ SELECT
     CASE WHEN random() < 0.5 THEN true ELSE false END AS card,
     CASE WHEN random() < 0.3 THEN null ELSE floor(random() * 6) + 5 END AS voucher,  -- 30% chance of null, otherwise 5 to 10
     floor(random() * 50) + 1 AS quantity
-FROM generate_series(1, 200);  -- insert 200 rows to ensure we get 100 valid rows based on probability
+FROM generate_series(1, 10000);  -- insert 10000 rows to ensure we get 100 valid rows based on probability
