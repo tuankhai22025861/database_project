@@ -5,7 +5,7 @@ SELECT
     floor(random() * 900) + 1 AS product_id,
     floor(random() * 100) + 1 AS warehouse_id,
     floor(random() * 100) + 1 AS shop_id
-FROM generate_series(1, 100) AS gs
+FROM generate_series(1, 10000) AS gs
 WHERE EXISTS (
     SELECT 1 FROM product WHERE product_id = floor(random() * 900) + 1
 ) AND EXISTS (
